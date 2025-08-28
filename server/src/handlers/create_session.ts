@@ -1,24 +1,38 @@
+import { db } from '../db';
+import { sessionsTable } from '../db/schema';
 import { type CreateSessionInput, type Session } from '../schema';
 import { randomUUID } from 'crypto';
 
-export async function createSession(input: CreateSessionInput): Promise<Session> {
-    // This is a placeholder implementation! Real code should be implemented here.
-    // The goal of this handler is creating a new anonymous session for tracking user activity
-    // without requiring registration. Sessions expire after 24 hours of inactivity.
-    
+export const createSession = async (input: CreateSessionInput): Promise<Session> => {
+  try {
     const sessionId = randomUUID();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
-    
-    return Promise.resolve({
+
+    // Insert session record
+    const result = await db.insert(sessionsTable)
+      .values({
         id: sessionId,
         browser_fingerprint: input.browser_fingerprint,
         ip_address: input.ip_address,
         user_agent: input.user_agent,
-        status: 'active' as const,
+        status: 'active',
         created_at: now,
         last_activity: now,
         expires_at: expiresAt,
-        metadata: input.metadata || null
-    });
-}
+        metadata: input.metadata ?? null
+      })
+      .returning()
+      .execute();
+
+    // Convert the database result to match the expected Session type
+    const session = result[0];
+    return {
+      ...session,
+      metadata: session.metadata as Record<string, any> | null
+    };
+  } catch (error) {
+    console.error('Session creation failed:', error);
+    throw error;
+  }
+};

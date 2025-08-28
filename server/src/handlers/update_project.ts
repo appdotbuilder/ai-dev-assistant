@@ -1,23 +1,47 @@
+import { db } from '../db';
+import { projectsTable } from '../db/schema';
 import { type UpdateProjectInput, type Project } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function updateProject(input: UpdateProjectInput): Promise<Project> {
-    // This is a placeholder implementation! Real code should be implemented here.
-    // The goal of this handler is updating project metadata like name, description,
-    // and public visibility status. Should validate session ownership/permissions.
-    
-    const now = new Date();
-    
-    return Promise.resolve({
-        id: input.id,
-        name: input.name || 'Updated Project',
-        description: input.description !== undefined ? input.description : null,
-        type: 'react' as const,
-        template_id: null,
-        session_id: 'placeholder-session',
-        created_at: now,
-        updated_at: now,
-        is_public: input.is_public || false,
-        preview_url: `https://preview.dev/${input.id}`,
-        deployment_url: null
-    });
-}
+export const updateProject = async (input: UpdateProjectInput): Promise<Project> => {
+  try {
+    // First, check if the project exists
+    const existingProject = await db.select()
+      .from(projectsTable)
+      .where(eq(projectsTable.id, input.id))
+      .execute();
+
+    if (existingProject.length === 0) {
+      throw new Error(`Project with id ${input.id} not found`);
+    }
+
+    // Build update object with only the fields that are provided
+    const updateData: any = {
+      updated_at: new Date()
+    };
+
+    if (input.name !== undefined) {
+      updateData.name = input.name;
+    }
+
+    if (input.description !== undefined) {
+      updateData.description = input.description;
+    }
+
+    if (input.is_public !== undefined) {
+      updateData.is_public = input.is_public;
+    }
+
+    // Update the project
+    const result = await db.update(projectsTable)
+      .set(updateData)
+      .where(eq(projectsTable.id, input.id))
+      .returning()
+      .execute();
+
+    return result[0];
+  } catch (error) {
+    console.error('Project update failed:', error);
+    throw error;
+  }
+};
